@@ -1,0 +1,6 @@
+{
+    "devices:": [],
+    "retries": 3,
+    "timeout": 3000,
+    domain: null,
+}
