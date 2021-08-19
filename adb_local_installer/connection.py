@@ -69,8 +69,8 @@ class ADBConnection(object):
         return pkg_name
 
     @staticmethod
-    def get_remote_path(name) -> str:
-        return "/sdcard/{}".format(name)
+    def get_remote_path(name: str, ver: str) -> str:
+        return "/sdcard/Download/{}.{}.apk".format(name, ver)
 
     def install_apk(self, local_path: str):
         with open(local_path, "rb") as fh:
@@ -89,10 +89,10 @@ class ADBConnection(object):
             if not self.requires_install(manifest):
                 logger.info("Update is not required. Skipping")
                 return None
-            logger.info("Installation required. Pushing the file")
-            remote_path = ADBConnection.get_remote_path(name)
+            remote_path = ADBConnection.get_remote_path(name, manifest["@android:versionName"])
+            logger.info("Installation required. Pushing the file [%s]", remote_path)
             try:
-                # self._push_apk(local_path, remote_path)
+                self._push_apk(local_path, remote_path)
                 logger.info("File successfully pushed")
                 self._install_apk(remote_path)
                 logger.info("File successfully installed")
@@ -104,8 +104,9 @@ class ADBConnection(object):
                 self._remove_apk(remote_path)
             return True
 
-    def _install_apk(self, local_path):
-        self.conn.shell(["pm", "install" "-r", local_path])
+    def _install_apk(self, remote_path):
+        # self.conn.install(remote_path)
+        self.conn.shell(["pm", "install" "-r", remote_path])
 
     @staticmethod
     def _package_manifest(apk):
@@ -124,8 +125,10 @@ class ADBConnection(object):
     def requires_install(self, manifest) -> bool:
         apk_ver = manifest["@android:versionName"]
         apk_name = manifest["@package"]
-        # @TODO - Implement retries
-        version_raw = self.conn.shell(["dumpsys", "package", apk_name, "|", "grep", "versionName"])
-        package_ver = re.search(r'versionName=([0-9\.]+)', version_raw).group(1)
+        try:
+            package_ver = self.conn.package_info(apk_name)["version_name"]
+        except (KeyError, TypeError):
+            logger.info("Unable to detect an installed version")
+            return True
         logger.info("Installed: %s; APK: %s", package_ver, apk_ver)
         return LooseVersion(apk_ver) > LooseVersion(package_ver)
